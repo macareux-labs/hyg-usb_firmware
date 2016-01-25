@@ -1,4 +1,5 @@
 hyg-usb_firmware
+================
 
 hyg_usb is a Temperature and Hygrometry USB sensor based on a PIC 16F1455 
 with a SI7021 ( see http://www.macareux-labs.com for details and schematics )
