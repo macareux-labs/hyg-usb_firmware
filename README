@@ -1,0 +1,15 @@
+hyg-usb_firmware
+
+hyg_usb is a Temperature and Hygrometry USB sensor based on a PIC 16F1455 
+with a SI7021 ( see http://www.macareux-labs.com for details and schematics )
+
+It comes with this firmware ( a simple USB stack in C ) preinstalled so you can
+start using it with a cli interface.
+
+But above all, it's a sensor you can HACK with just a pic programmer such as 
+pickit2 or pickit3. We hope you'll find this useful : have fun !!!
+
+
+
+
+
