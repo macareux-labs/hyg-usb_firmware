@@ -13,6 +13,8 @@ void set_green_led(unsigned ) ;
 void set_red_led(unsigned ) ;
 void set_yellow_led(unsigned ) ;
 
+void set_all_leds( unsigned s ) ;
+
 void toggle_green_led() ;
 void toggle_red_led() ;
 void toggle_yellow_led() ;

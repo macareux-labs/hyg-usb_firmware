@@ -367,8 +367,9 @@ void usb_interrupt_handler() {
 					if ( EP1_OUTbuffer[0] == 66 )
 						green_led = LED_OFF ;
 					
-					if ( EP1_OUTbuffer[0] == 67 )
-						green_led = LED_AUTO ;
+					if ( EP1_OUTbuffer[0] == 67 ) {
+						set_all_leds(0) ;
+						green_led = LED_AUTO ; }
 
 					if ( EP1_OUTbuffer[1] == 65 ) 
 						yellow_led = LED_ON ;
@@ -376,8 +377,9 @@ void usb_interrupt_handler() {
 					if ( EP1_OUTbuffer[1] == 66 )
 						yellow_led = LED_OFF ;
 					
-					if ( EP1_OUTbuffer[1] == 67 )
-						yellow_led = LED_AUTO ;
+					if ( EP1_OUTbuffer[1] == 67 ) {
+						set_all_leds(0) ;
+						yellow_led = LED_AUTO ; }
 
 					if ( EP1_OUTbuffer[2] == 65 ) 
 						red_led = LED_ON ;
@@ -385,8 +387,9 @@ void usb_interrupt_handler() {
 					if ( EP1_OUTbuffer[2] == 66 )
 						red_led = LED_OFF ;
 					
-					if ( EP1_OUTbuffer[2] == 67 )
-						red_led = LED_AUTO ;
+					if ( EP1_OUTbuffer[2] == 67 ) {
+						set_all_leds(0) ;
+						red_led = LED_AUTO ; }
 
 					if ( EP1_OUTbuffer[3] == 65 ) {
 

@@ -43,3 +43,8 @@ void toggle_red_led() {
 	PORTCbits.RC2 = !PORTCbits.RC2 ;
 }
 
+void set_all_leds( unsigned s ) {
+	PORTCbits.RC4 = s;
+	PORTCbits.RC2 = s;
+	PORTCbits.RC3 = s;
+}
