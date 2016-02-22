@@ -64,7 +64,7 @@ const struct {
 } StringDescriptor2 = {
 	sizeof(StringDescriptor2), 
 	0x03, 
-	{ 'h', 'u', 'g', '-', 'u', 's', 'b', ' ', 'S', 'i', '7', '0', '2', '1' }
+	{ 'h', 'y', 'g', '-', 'u', 's', 'b', ' ', 'S', 'i', '7', '0', '2', '1' }
 };
 
 const unsigned char ConfigurationDescriptor[32] = {
