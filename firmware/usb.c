@@ -403,7 +403,7 @@ void usb_interrupt_handler() {
 						EP1_INbuffer[4] = green_led ;
 						EP1_INbuffer[5] = yellow_led ;
 						EP1_INbuffer[6] = red_led ;
-						EP1_INbuffer[7] = 0x00 ;
+						EP1_INbuffer[7] = hyg_MSB ^ hyg_LSB ^ temp_MSB ^ temp_LSB ^ green_led ^ yellow_led ^ red_led ;
 
 						Interfaces[1].Input.Stat = UOWN | DTS | DTSEN ;
 					
@@ -428,7 +428,7 @@ void usb_interrupt_handler() {
 					EP1_INbuffer[4] = green_led ;
 					EP1_INbuffer[5] = yellow_led ;
 					EP1_INbuffer[6] = red_led ;
-					EP1_INbuffer[7] = 0x00 ;
+					EP1_INbuffer[7] = hyg_MSB ^ hyg_LSB ^ temp_MSB ^ temp_LSB ^ green_led ^ yellow_led ^ red_led ;
 
 					if ( Interfaces[1].Input.Stat & DTS )
 						Interfaces[1].Input.Stat = UOWN | DTSEN ;

@@ -1,4 +1,4 @@
-CC =  /opt/microchip/xc8/v1.34/bin/xc8
+CC =  /opt/microchip/xc8/v1.37/bin/xc8
 MDB = /opt/microchip/mplabx/mplab_ide/bin/mdb.sh
 
 PK2CMD = /usr/local/bin/pk2cmd
