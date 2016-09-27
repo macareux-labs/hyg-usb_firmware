@@ -391,7 +391,7 @@ void usb_interrupt_handler() {
 						set_all_leds(0) ;
 						red_led = LED_AUTO ; }
 
-					if ( EP1_OUTbuffer[3] == 65 ) {
+					if ( !(Interfaces[1].Input.Stat & UOWN) ) {
 
 						Interfaces[1].Input.Cnt = 8 ;
 						Interfaces[1].Input.ADDR = 0x2084 ;
