@@ -7,6 +7,8 @@
 # Precompiled Headers
 *.gch
 *.pch
+*.p1
+*.pre
 
 # Libraries
 *.lib
@@ -30,3 +32,6 @@
 
 # Debug files
 *.dSYM/
+
+# Backup files
+*~
