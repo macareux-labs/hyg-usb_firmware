@@ -6,9 +6,8 @@ PK2DEVPATH= /usr/share/pk2
 
 SOURCES = main.c usb.c leds.c i2c.c si7021A10.c
 CHIP = 16F1455
-EXEC = test
+EXEC = hygusb-firm
 
-CFLAGS =
 LDFLAGS =
 
 OBJS = $(SOURCES:.c=.p1)
@@ -21,15 +20,14 @@ $(EXEC): $(OBJS)
 
 all: $(EXEC)
 
-clean: 
+clean:
 	rm -f MPLABXLog.xml*
 	rm -f l.obj
 	rm -f funclist
 	rm -f prog.cmd
 	rm -f $(EXEC).*
 	rm -f startup.*
-	rm -f *.d *.p1 *.pre 
-	
+	rm -f *.d *.p1 *.pre
 
 
 pickit3: $(EXEC)
@@ -40,6 +38,5 @@ pickit3: $(EXEC)
 	echo "Quit" >> prog.cmd
 	$(MDB) prog.cmd
 
-pickit2:  
-	$(PK2CMD) -M -PPIC16F1455 -F$(EXEC).hex -B$(PK2DEVPATH)
-
+pickit2:
+	$(PK2CMD) -M -PPIC${CHIP} -F$(EXEC).hex -B$(PK2DEVPATH)
