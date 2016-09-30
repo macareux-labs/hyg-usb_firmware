@@ -10,25 +10,20 @@
 *.p1
 *.pre
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
+# Dependency
+*.d
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
+# Build files
+*.as
+*.cmf
+*.cof
+*.sym
+*.sdb
+*.hxl
 *.hex
+
+# xc8 startup code
+startup.*
 
 # Debug files
 *.dSYM/
