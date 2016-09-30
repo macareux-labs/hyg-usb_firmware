@@ -1,13 +1,22 @@
 #ifndef MAIN_H
 #define MAIN_H
 
-unsigned char temp_MSB ;
-unsigned char temp_LSB ;
-unsigned char hyg_MSB ;
-unsigned char hyg_LSB ;
+typedef struct {
+	__WORD hyg;
+	__WORD temp;
 
-signed char green_led ;
-signed char red_led ;
-signed char yellow_led ;
+	signed char green_led;
+	signed char yellow_led;
+	signed char red_led;
+	uint8_t crc;
+} _INTERNAL_DEVSTATE;
+
+extern __INTERNAL_DEVSTATE __dev_state;
 
 #endif
+
+/* Local Variables:    */
+/* mode: c             */
+/* c-basic-offset: 8   */
+/* indent-tabs-mode: t */
+/* End:                */
