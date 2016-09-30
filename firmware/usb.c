@@ -1,488 +1,491 @@
 #include <xc.h>
+#include <string.h>
+#include "types.h"
 #include "usb.h"
 #include "leds.h"
 #include "descriptors.h"
 #include "main.h"
 
-#define UOWN 		0x80 
-#define DTSEN  		0x08
-#define DTS  		0x40
-#define BSTALL          0x04
+#define UOWN		0x80	// USB Ownership Bit
+#define DTSEN		0x08	// Data Toggle Sync Enable
+#define DTS		0x40	// Data Toggle Sync
+#define BSTALL          0x04	// Buffer Stall
 
 typedef struct {
-	unsigned char Stat ;
-	unsigned char Cnt ;
-	unsigned int ADDR ;
-} __BufferDescriptor;
+	union {
+		struct {
+			uint8_t bch:2 ;
+			uint8_t pid:4 ;
+			uint8_t reserved:1 ;
+			uint8_t uown:1 ;
+		} ;
+		struct {
+			uint8_t :2 ;
+			uint8_t bstall:1 ;
+			uint8_t dtsen:1 ;
+			uint8_t :2 ;
+			uint8_t dts:1 ;
+			uint8_t :1 ;
+		} ;
+		uint8_t BDnSTAT ;
+	} ;
+	uint8_t BDnCNT ;
+	uint16_t BDnADR ;	/* BDnADRL and BDnADRH; */
+} __BufferDescriptor ;
 
 typedef struct {
-	__BufferDescriptor Output ;
-	__BufferDescriptor Input ;
+	__BufferDescriptor Output ;	// Host to Device
+	__BufferDescriptor Input ;	// Device to Host
 } Interface ;
 
+// USB Module Memory Mapping start at 0x2000
+volatile __at ( 0x2000 )
+Interface Interfaces[2] ;
 
-volatile __at(0x2000) Interface Interfaces[2] ;					// MUST be stored at 0x2000
+struct {
+	// --- End Point 0
+	uint8_t OUT0[EP0_BUFLEN] ;
+	uint8_t IN0[EP0_BUFLEN] ;
 
-unsigned char* addr_to_send ;
-unsigned int   cnt_to_send  ;
+	// --- End Point 1
+	uint8_t OUT1[EP1_BUFLEN] ;
+	uint8_t IN1[EP1_BUFLEN] ;
+} ep_buffers __at ( 0x2080 ) ;
 
-unsigned char addresse ;
+// Local data
+uint8_t *addr_to_send ;
+uint16_t cnt_to_send ;
 
-
-// --- End Point 0
-
-volatile __at(0x203F) unsigned char   EP0_OUTbuffer[8] ;
-volatile __at(0x2071) unsigned char   EP0_INbuffer[8] ;
-
-// --- End Point 1
-
-volatile __at(0x207B) unsigned char   EP1_OUTbuffer[8] ;
-volatile __at(0x2084) unsigned char   EP1_INbuffer[8] ;
-
-
+uint8_t addresse ;
 
 // Predecla
 
+void setup_endpoints (  ) {
 
-void setup_endpoints() ;
+	// Reset Buffer Descriptors and re-init
+	memset ( Interfaces, 0x0, sizeof ( Interfaces ) ) ;
 
+	// * Setup Buffers
+	Interfaces[0].Output.BDnADR = PHYS_ADDR ( ep_buffers.OUT0 ) ;
+	Interfaces[0].Output.BDnCNT = EP0_BUFLEN ;
+	Interfaces[0].Output.BDnSTAT = UOWN | DTSEN ;
 
+	Interfaces[0].Input.BDnADR = PHYS_ADDR ( ep_buffers.IN0 ) ;
+	Interfaces[0].Input.BDnCNT = 0 ;
+	Interfaces[0].Input.BDnSTAT = 0 ;
 
-void setup_usb() {
+	Interfaces[1].Output.BDnADR = PHYS_ADDR ( ep_buffers.OUT1 ) ;
+	Interfaces[1].Output.BDnCNT = EP1_BUFLEN ;
+	Interfaces[1].Output.BDnSTAT = UOWN | DTSEN ;
 
-	UCFG = 0x10 ;	// Enable Pullups ; Low speed device ; no ping pong
-	UADDR = 0x00 ;	// Reset usb adress
-	UEIR = 0x00 ;	// Clear all usb error interrupts
+	Interfaces[1].Input.BDnADR = PHYS_ADDR ( ep_buffers.IN1 ) ;
+	Interfaces[1].Input.BDnCNT = 0 ;
+	Interfaces[1].Input.BDnSTAT = 0 ;
 
-	addresse = 0x00 ;
+}
 
-	// Reset PP buffers 
-	
-	do {
-		UCONbits.PPBRST = 1 ;
-		UCONbits.PPBRST = 0 ;
+void reset_usb (  ) {
 
-	} while(0) ;
+#if defined(_USB_LOWSPEED)
+	UCFG = 0x10 ;		// Enable Pullups : Low speed device ; no ping pong
+#else
+	UCFG = 0x14 ;		// Enable Pullups : FS device ; no ping pong
+#endif
 
+	UADDR = 0 ;		// Reset usb address
 
-	// Enable Packet transfers
+	UIE = 0 ;		// Reset USB Interrupts
 
-	UCONbits.PKTDIS = 0 ;	
+#if defined(_USB_ERROR_INTERRUPT)
+	UIE = 0b00101011 ;	// Enable interrupts
+	//UIEbits.URSTIE = 1 ;   // USB Reset Interrupt
+	//UIEbits.UERRIE = 1 ;   // USB Error Interrupt
+	//UIEbits.TRNIE  = 1 ;   // USB Transaction Complete
+	//UIEbits.IDLEIE = 0 ;   // USB IDLE Detect Interrupt
+	//UIEbits.STALLIE= 1 ;   // USB STALL Handshake Interrupt
+	//UIEbits.SOFIE  = 0 ;   // USB Start Of Frame
 
+	UEIE = 0b100111111 ;	// ErrorInterrupt: BTSEE | BTOEE | DFN8EE | CRC16EE | CRC5EE | PIDEE
+#else
+	UIE = 0b00101001 ;	// Enable interrupts
+	//UIEbits.URSTIE = 1 ;   // USB Reset Interrupt
+	//UIEbits.UERRIE = 0 ;   // USB Error Interrupt
+	//UIEbits.TRNIE  = 1 ;   // USB Transaction Complete
+	//UIEbits.IDLEIE = 0 ;   // USB IDLE Detect Interrupt
+	//UIEbits.STALLIE= 1 ;   // USB STALL Handshake Interrupt
+	//UIEbits.SOFIE  = 0 ;   // USB Start Of Frame
 
-	// Enable USB module
+	UEIE = 0 ;		// USB Error Interrupt: disabled
+#endif
 
-	if ( UCONbits.USBEN == 0 ) {
-		UCON = 0 ;
-		UIE = 0 ;
-		UCONbits.USBEN = 1 ;
+	// Clear flags
+	UEIR = 0 ;		// Clear all usb error interrupts
+	UIR = 0 ;		// Clear all usb status interrupts
+
+	addresse = 0 ;
+	cnt_to_send = 0 ;
+
+	/* If the PLL is being used, wait until the
+	   PLLRDY bit is set in the OSCSTAT register
+	   before attempting to set the USBEN bit. */
+
+	if ( OSCCONbits.SPLLEN ) {
+		while ( !OSCSTATbits.PLLRDY ) ;
 	}
 
-	while( UCONbits.SE0 ) ;
+	/* If USB module not enabled */
+	if ( UCONbits.USBEN == 0 ) {
+		UCON = 0 ;
 
-	UIR = 0 ;
-	UIE = 0 ;
-	UIEbits.URSTIE = 1 ;
-	UIEbits.IDLEIE = 1 ;
+		UCONbits.USBEN = 1 ;	// Enable USB module
 
+		// Wait for single-ended zero condition to clear.
+		while ( UCONbits.SE0 ) ;
+	}
 
-	// Enable interrupts
-
-	UIE = 0x4B ;		// Enable TRNIF, SOFIF, ERROR, RESET
-	
-	INTCONbits.PEIE = 1;	// Enable Peripheral interrupts
-	INTCONbits.GIE = 1;	// General interrupt enabled 
-	PIE2bits.USBIE = 1;	// USB interrupt enabled
-}
-
-
-void setup_endpoints() {
-
-	UEP1 = 0x1E ;			
-
-	Interfaces[1].Output.Cnt  = 8 ;
-	Interfaces[1].Output.ADDR = 0x207B ;	
-	Interfaces[1].Output.Stat = UOWN | DTSEN ;
-	
-	Interfaces[1].Input.Stat  = 0x00 ;
-
-}
-
-
-
-void reset_usb() {
-
-	UEIR = 0x00 ;
-	UIR = 0x00 ;
-	UEIE = 0x9f ;
-	UIE = 0x7b ;
-	UADDR = 0x00 ;
-	
-	addresse = 0x00 ;
-	cnt_to_send = 0 ;
-	
-	UEP0 = 0x16 ;
-
+	// Empty FIFO
 	UIRbits.TRNIF = 0 ;
 	UIRbits.TRNIF = 0 ;
 	UIRbits.TRNIF = 0 ;
 	UIRbits.TRNIF = 0 ;
 
+	// * Reset ALL Endpoints
+	UEP0 = 0 ;
+	UEP1 = 0 ;
+	UEP2 = 0 ;
+	UEP3 = 0 ;
+	UEP4 = 0 ;
+	UEP5 = 0 ;
+	UEP6 = 0 ;
+	UEP7 = 0 ;
+
+	// * Configure Endpoint 0 (Main USB Init)
+	UEP0 = 0b00010110 ;
+	//UEP0bits.EPHSHK  = 1 ; // Enable Handshake
+	//UEP0bits.EPOUTEN = 1 ; // Outbound
+	//UEP0bits.EPINEN  = 1 ; // Inbound
+
+	// * Configure Endpoint 1 (Application)
+	UEP1 = 0b00011110 ;
+	//UEP1bits.EPHSHK   = 1 ; // Enable Handshake
+	//UEP1bits.EPCONDIS = 1 ; // Enable control operations
+	//UEP1bits.EPOUTEN  = 1 ; // Outound
+	//UEP1bits.EPINEN   = 1 ; // Inbound
+
+	// Setup Endpoints:
+	setup_endpoints (  ) ;
+
+	// Enable Packet transfers
 	UCONbits.PKTDIS = 0 ;
-
-	// WaitForPacket
-
-	Interfaces[0].Output.Cnt  = 8 ;
-	Interfaces[0].Output.ADDR = 0x203F ;
-	Interfaces[0].Output.Stat = UOWN | DTSEN ;
-
-	Interfaces[0].Input.Stat  = 0x00 ;
-
 }
 
+void fill_in_buffer (  ) {
 
-void fill_in_buffer() {
+	uint16_t i ;
+	uint16_t byte_count ;
 
-	unsigned int i ;
-	unsigned int byte_count ;
+	byte_count = ( cnt_to_send < EP0_BUFLEN ) ? cnt_to_send : EP0_BUFLEN ;
 
-	if ( cnt_to_send < 8 )
-		byte_count = cnt_to_send ;
-	else
-		byte_count = 8 ;
+	Interfaces[0].Input.bch = 0 ;
+	Interfaces[0].Input.BDnCNT = byte_count ;
 
-	Interfaces[0].Input.Stat &= ~( 0x03 ) ;
-	Interfaces[0].Input.Cnt = byte_count ;
-	Interfaces[0].Input.ADDR = 0x2071 ;
+	for ( i = 0; i < byte_count; i++ )
+		ep_buffers.IN0[i] = addr_to_send[i] ;
 
-	for ( i=0; i<byte_count; i++ )
-		EP0_INbuffer[i] = addr_to_send[i] ;
-
-	cnt_to_send  -= byte_count ;
+	cnt_to_send -= byte_count ;
 	addr_to_send += byte_count ;
 
 }
 
+/* Handle inital USB setup from Host */
+void process_setup_packets (  ) {
+	uint8_t dts ;
 
-void process_setup_packets() {
+	if ( USTATbits.DIR == 0 ) {	// This is an OUT or a SETUP transaction
 
-		
-			if ( USTATbits.DIR == 0 ) {						// This is an OUT or a SETUP transaction
-			
-				unsigned char PID = ( Interfaces[0].Output.Stat & 0x3C ) >> 2 ;
+		uint8_t PID = Interfaces[0].Output.pid ;
 
-				if ( PID == 0x0D ) {						// This is a SETUP packet
-					
-					Interfaces[0].Input.Stat  &= ~UOWN ;
-					Interfaces[0].Output.Stat &= ~UOWN ;
+		if ( PID == USB_PID_SETUP ) {	// This is a SETUP packet
 
-					SetupPacketStruct* SetupPacket ;
-					SetupPacket = (SetupPacketStruct*) EP0_OUTbuffer ;
+			// Clear UOWN & STALL (Get memory access)
+			Interfaces[0].Input.BDnSTAT = 0 ;
+			Interfaces[0].Output.BDnSTAT = 0 ;
 
-					if ( SetupPacket->bmRequestType == 0x80 ) { 		// Data will go from Device to host
+			Interfaces[0].Output.BDnCNT = EP0_BUFLEN ;
+			Interfaces[0].Input.BDnCNT = 0 ;
 
-						if ( SetupPacket->bRequest == 0x06 ) { 		// GET_DESCRIPTOR
-							
-							switch ( SetupPacket->wValue1 ) {
-							
-								case 0x01: 			// Device Descriptor		
-						
-									addr_to_send = (unsigned char*) DeviceDescriptor ; 
-									cnt_to_send  = SetupPacket->wLength ;
-									Interfaces[0].Output.Cnt  = 8 ;
-									Interfaces[0].Output.ADDR = 0x203F ;
-									Interfaces[0].Output.Stat = UOWN | DTSEN ;
-									fill_in_buffer() ;
-									Interfaces[0].Input.Stat = UOWN | DTS | DTSEN ;
-									UCONbits.PKTDIS = 0 ;
-									break ;
+			SetupPacketStruct *SetupPacket ;
+			SetupPacket = ( SetupPacketStruct * ) ep_buffers.OUT0 ;
 
-								case 0x02 :			// Configuration Descriptor
-								
-									addr_to_send = (unsigned char*) ConfigurationDescriptor ; 
-									cnt_to_send  = SetupPacket->wLength ;		
-									Interfaces[0].Output.Cnt  = 8 ;
-									Interfaces[0].Output.ADDR = 0x203F ;
-									Interfaces[0].Output.Stat = UOWN | DTSEN ;
-									fill_in_buffer() ;
-									Interfaces[0].Input.Stat = UOWN | DTS | DTSEN ;
-									UCONbits.PKTDIS = 0 ;
-									break ;
+			if ( SetupPacket->bmRequestType == 0x80 ) {	// Data will go from Device to host
 
-								case 0x03 :			// String descriptor
+				if ( SetupPacket->bRequest == USB_REQ_GET_DESCRIPTOR ) {
 
-									switch( SetupPacket->wValue0 ) {
+					switch ( SetupPacket->wValue1 ) {
 
-										case 0x00:
-											addr_to_send = (unsigned char*) &StringDescriptor0 ; 
-											cnt_to_send  = sizeof(StringDescriptor0) ; 
-											break ;
-										case 0X01:
-											addr_to_send = (unsigned char*) &StringDescriptor1 ;
-											cnt_to_send = sizeof(StringDescriptor1) ;
-											break ;
+					case USB_GET_DEVICE_DESCRIPTOR:
+						addr_to_send =
+							( uint8_t * )
+							&DeviceDescriptor ;
+						cnt_to_send =
+							SetupPacket->wLength ;
 
-										case 0X02:
-											addr_to_send = (unsigned char*) &StringDescriptor2 ;
-											cnt_to_send = sizeof(StringDescriptor2) ;
-											break ;
+						fill_in_buffer (  ) ;
+						break ;
 
-									}
+					case USB_GET_CONFIG_DESCRIPTOR:
+						addr_to_send =
+							( uint8_t * )
+							ConfigurationDescriptor ;
+						cnt_to_send =
+							SetupPacket->wLength ;
 
-									Interfaces[0].Output.Cnt  = 8 ;
-									Interfaces[0].Output.ADDR = 0x203F ;
-									Interfaces[0].Output.Stat = UOWN | DTSEN ;
-									fill_in_buffer() ;
-									Interfaces[0].Input.Stat = UOWN | DTS | DTSEN ;	
-									UCONbits.PKTDIS = 0 ;
-									
-									break ;
+						fill_in_buffer (  ) ;
+						break ;
 
-								default:
-									
-									Interfaces[0].Output.Cnt = 8 ;
-									Interfaces[0].Output.ADDR = 0x203F ;
-									Interfaces[0].Output.Stat = UOWN | BSTALL;
-									
-									Interfaces[0].Input.Cnt = 0 ;
-									Interfaces[0].Input.ADDR = 0x2071 ;
-									Interfaces[0].Input.Stat  = UOWN | BSTALL;
-									UCONbits.PKTDIS = 0 ;
+					case USB_GET_STRING_DESCRIPTOR:
+						addr_to_send =
+							USBStringDescriptorsPtr
+							[SetupPacket->wValue0] ;
+						cnt_to_send = *addr_to_send ;
 
-									break ;
+						fill_in_buffer (  ) ;
+						break ;
 
-							}
-					       }
-
-					       if ( SetupPacket->bRequest == 0x00 ) {		// GET_STATUS
-					
-							EP0_INbuffer[0] = 0x00 ;
-							EP0_INbuffer[1] = 0x00 ;
-							Interfaces[0].Output.Cnt  = 8 ;
-						        Interfaces[0].Output.ADDR = 0x203F ;
-						        Interfaces[0].Output.Stat = UOWN | DTSEN ;
-							Interfaces[0].Input.Cnt = 2 ; 
-							Interfaces[0].Input.ADDR = 0x2071 ;
-							Interfaces[0].Input.Stat = UOWN | DTS | DTSEN ;
-
-							UCONbits.PKTDIS = 0 ;
-
-					      }
-					}
-
-					if ( SetupPacket->bmRequestType == 0x00 ) {		// data will go from Host to Device
-
-
-						switch ( SetupPacket->bRequest ) {
-						
-							case 0x05 :							// SET ADDRESS
-								addresse = SetupPacket->wValue0 ;
-								
-								Interfaces[0].Input.Cnt = 0 ;
-								Interfaces[0].Input.ADDR = 0x2071 ;
-								Interfaces[0].Input.Stat = UOWN | DTS | DTSEN ;
-								
-								Interfaces[0].Output.Cnt  = 8 ;
-								Interfaces[0].Output.ADDR = 0x203F ;
-								Interfaces[0].Output.Stat = UOWN | DTSEN ;
-								
-								UCONbits.PKTDIS = 0 ;
-								
-								break ;
-
-							case 0x09 :							// SET CONFIGURATION
-								Interfaces[0].Input.Cnt = 0 ;
-								Interfaces[0].Input.ADDR = 0x2071 ;
-								Interfaces[0].Input.Stat = UOWN | DTS | DTSEN ;
-								
-								Interfaces[0].Output.Cnt = 8 ;
-								Interfaces[0].Output.ADDR = 0x203F ;
-								Interfaces[0].Output.Stat = UOWN | DTSEN ;
-								
-								UCONbits.PKTDIS = 0 ;
-							
-								setup_endpoints() ;
-
-								break ;
-
-							default:
-								break ;
-
-
-						}
+					default:	// Inconnu: stall ep0
+						Interfaces[0].Output.BDnSTAT =
+							UOWN | BSTALL ;
+						Interfaces[0].Input.BDnSTAT =
+							UOWN | BSTALL ;
+						UCONbits.PKTDIS = 0 ;
+						return ;
 
 					}
-					
-					
-				
 				}
 
-			} else {								// This is an In packet
+				if ( SetupPacket->bRequest == USB_REQ_GET_STATUS ) {
 
+					ep_buffers.IN0[0] = 0x00 ;
+					ep_buffers.IN0[1] = 0x00 ;
 
-				if (( addresse != 0x00 ) && ( UADDR != addresse ) )
-					UADDR = addresse ;
+					Interfaces[0].Input.BDnCNT = 2 ;
+				}
+			}
 
-				fill_in_buffer() ;
+			if ( SetupPacket->bmRequestType == 0x00 ) {	// data will go from Host to Device
 
-				if ( Interfaces[0].Input.Stat & DTS )
-					Interfaces[0].Input.Stat = UOWN | DTSEN ;
-				else
-					Interfaces[0].Input.Stat = UOWN | DTS | DTSEN ;
+				switch ( SetupPacket->bRequest ) {
+
+				case USB_REQ_SET_ADDRESS:
+					addresse = SetupPacket->wValue0 ;
+					break ;
+
+				case USB_REQ_SET_CONFIGURATION:
+					setup_endpoints (  ) ;
+					break ;
+
+				default:
+					break ;
+
+				}
 
 			}
 
+			/* Give back buffesr to the USB module */
+			Interfaces[0].Output.BDnSTAT = UOWN | DTSEN ;
+			Interfaces[0].Input.BDnSTAT = UOWN | DTS | DTSEN ;
 
+			/* Reset the Packet disable bit which is automatically
+			 * set for processing SETUP Packets */
+			UCONbits.PKTDIS = 0 ;
+		}
 
+	} else {		// This is an In packet
 
+		if ( ( addresse != 0x00 ) && ( UADDR != addresse ) )
+			UADDR = addresse ;
 
+		fill_in_buffer (  ) ;
+		dts = Interfaces[0].Input.dts ;
+		Interfaces[0].Input.BDnSTAT = 0 ;	// Reset BDnSTAT before set
 
+		/* NB: The firmware should not set the UOWN bit
+		   in the same instruction cycle as any other
+		   modifications to the BDnSTAT soft
+		   register. The UOWN bit should only be set
+		   in a separate instruction cycle, only after
+		   all other bits in BDnSTAT (and address/
+		   count registers) have been fully updated. */
+		if ( dts )
+			Interfaces[0].Input.BDnSTAT = UOWN | DTSEN ;
+		else
+			Interfaces[0].Input.BDnSTAT = UOWN | DTS | DTSEN ;
+
+	}
 }
 
+/* Handle HYG-USB processing (EP1) */
+void process_command_packets (  ) {
+	uint8_t dts ;
 
+	if ( USTATbits.DIR == 0 ) {	// This is an OUT transaction
 
-void usb_interrupt_handler() {
+		if ( ep_buffers.OUT1[0] == 65 )
+			__dev_state.green_led = LED_ON ;
 
+		if ( ep_buffers.OUT1[0] == 66 )
+			__dev_state.green_led = LED_OFF ;
 
-	if (!PIR2bits.USBIF)
-		return;
-
-	if (UIRbits.TRNIF) {									// Transaction complete
-		
-		if ( USTATbits.ENDP == 0 ) {							// This is for endpoint 0
-
-			process_setup_packets() ;
-
-
-		} else {
-
-
-			if ( USTATbits.ENDP == 1 ) {							// This is for endpoint 1
-			
-				if ( USTATbits.DIR == 0 ) {						// This is an OUT transaction
-
-					if ( EP1_OUTbuffer[0] == 65 ) 		
-						green_led = LED_ON ;
-					
-					if ( EP1_OUTbuffer[0] == 66 )
-						green_led = LED_OFF ;
-					
-					if ( EP1_OUTbuffer[0] == 67 ) {
-						set_all_leds(0) ;
-						green_led = LED_AUTO ; }
-
-					if ( EP1_OUTbuffer[1] == 65 ) 
-						yellow_led = LED_ON ;
-					
-					if ( EP1_OUTbuffer[1] == 66 )
-						yellow_led = LED_OFF ;
-					
-					if ( EP1_OUTbuffer[1] == 67 ) {
-						set_all_leds(0) ;
-						yellow_led = LED_AUTO ; }
-
-					if ( EP1_OUTbuffer[2] == 65 ) 
-						red_led = LED_ON ;
-					
-					if ( EP1_OUTbuffer[2] == 66 )
-						red_led = LED_OFF ;
-					
-					if ( EP1_OUTbuffer[2] == 67 ) {
-						set_all_leds(0) ;
-						red_led = LED_AUTO ; }
-
-					if ( !(Interfaces[1].Input.Stat & UOWN) ) {
-
-						Interfaces[1].Input.Cnt = 8 ;
-						Interfaces[1].Input.ADDR = 0x2084 ;
-
-						EP1_INbuffer[0] = hyg_MSB ;			
-						EP1_INbuffer[1] = hyg_LSB ;
-						EP1_INbuffer[2] = temp_MSB ;
-						EP1_INbuffer[3] = temp_LSB ;
-						EP1_INbuffer[4] = green_led ;
-						EP1_INbuffer[5] = yellow_led ;
-						EP1_INbuffer[6] = red_led ;
-						EP1_INbuffer[7] = hyg_MSB ^ hyg_LSB ^ temp_MSB ^ temp_LSB ^ green_led ^ yellow_led ^ red_led ;
-
-						Interfaces[1].Input.Stat = UOWN | DTS | DTSEN ;
-					
-					}
-
-
-					Interfaces[1].Output.Cnt  = 8 ;
-					Interfaces[1].Output.ADDR = 0x207B ;	
-
-					if ( Interfaces[1].Output.Stat & DTS )
-						Interfaces[1].Output.Stat = UOWN | DTSEN ;
-					else
-						Interfaces[1].Output.Stat = UOWN | DTS | DTSEN ;
-
-
-				} else {								// Last one was an IN transaction
-
-					EP1_INbuffer[0] = hyg_MSB ;			
-					EP1_INbuffer[1] = hyg_LSB ;
-					EP1_INbuffer[2] = temp_MSB ;
-					EP1_INbuffer[3] = temp_LSB ;
-					EP1_INbuffer[4] = green_led ;
-					EP1_INbuffer[5] = yellow_led ;
-					EP1_INbuffer[6] = red_led ;
-					EP1_INbuffer[7] = hyg_MSB ^ hyg_LSB ^ temp_MSB ^ temp_LSB ^ green_led ^ yellow_led ^ red_led ;
-
-					if ( Interfaces[1].Input.Stat & DTS )
-						Interfaces[1].Input.Stat = UOWN | DTSEN ;
-					else
-						Interfaces[1].Input.Stat = UOWN | DTS | DTSEN ;
-
-
-				}
-			
-			
-			}
-
-		}
-		
-		UIRbits.TRNIF = 0;
-	}
-
-	if (UIRbits.SOFIF) {				// Start of Frame ( not used )
-
-		UIRbits.SOFIF = 0 ;
-	}
-
-	if (UIRbits.STALLIF) {				// Stall 
-
-		if (UEP0bits.EPSTALL == 1) {
-		
-			Interfaces[0].Output.Cnt  = 8 ;
-			Interfaces[0].Output.ADDR = 0x203F ;
-			Interfaces[0].Output.Stat = UOWN | DTSEN ;
-			
-			Interfaces[0].Input.Stat  = 0x00 ;
-
-			UEP0bits.EPSTALL = 0;
+		if ( ep_buffers.OUT1[0] == 67 ) {
+			set_all_leds ( 0 ) ;
+			__dev_state.green_led = LED_AUTO ;
 		}
 
-		if (UEP1bits.EPSTALL == 1) {
-		
-			set_green_led(0) ;		
-			set_yellow_led(0) ;
-			set_red_led(1) ;
-			
+		if ( ep_buffers.OUT1[1] == 65 )
+			__dev_state.yellow_led = LED_ON ;
 
-			UEP1bits.EPSTALL = 0;
+		if ( ep_buffers.OUT1[1] == 66 )
+			__dev_state.yellow_led = LED_OFF ;
+
+		if ( ep_buffers.OUT1[1] == 67 ) {
+			set_all_leds ( 0 ) ;
+			__dev_state.yellow_led = LED_AUTO ;
 		}
 
-		UIRbits.STALLIF = 0;
+		if ( ep_buffers.OUT1[2] == 65 )
+			__dev_state.red_led = LED_ON ;
+
+		if ( ep_buffers.OUT1[2] == 66 )
+			__dev_state.red_led = LED_OFF ;
+
+		if ( ep_buffers.OUT1[2] == 67 ) {
+			set_all_leds ( 0 ) ;
+			__dev_state.red_led = LED_AUTO ;
+		}
+
+		// Received OUT transaction: arm IN buffer for a request.
+		// If not already done in main loop
+		if ( !( Interfaces[1].Input.uown ) ) {
+			usb_arm_in_transfert (  ) ;
+		}
+
+		Interfaces[1].Output.BDnSTAT = 0 ;
+		Interfaces[1].Output.BDnCNT = 0 ;
+		Interfaces[1].Output.BDnSTAT = UOWN | DTS | DTSEN ;
+
+	} else {
+		// Completed IN transaction: rearm for a next request.
+		// If not already done in main loop
+		if ( !( Interfaces[1].Input.uown ) ) {
+			usb_arm_in_transfert (  ) ;
+		}
+	}
+}
+
+/* Main USB interrupt handler */
+void usb_interrupt_handler (  ) {
+
+	if ( !PIR2bits.USBIF )
+		return ;
+
+#if defined( _USB_ERROR_INTERRUPT )
+	if ( UIRbits.UERRIF ) {	// Detection d'erreur
+		if ( UEIRbits.BTSEF ) {	// Bit Stuff Error Flag
+		}
+		if ( UEIRbits.BTOEF ) {	// Bus Turnaround Time-out Error Flag
+		}
+		if ( UEIRbits.DFN8EF ) {	// Data Field Size Error Flag
+		}
+		if ( UEIRbits.CRC16EF ) {	//CRC16 Failure Flag
+		}
+		if ( UEIRbits.CRC5EF ) {	// CRC5 Host Error Flag
+		}
+		if ( UEIRbits.PIDEF ) {	// PID Check Failure Flag bit
+		}
+		UEIR = 0 ;
+	}
+#endif
+
+	if ( UIRbits.TRNIF ) {	// Transaction complete
+
+		switch ( USTATbits.ENDP ) {
+		case 0:
+			process_setup_packets (  ) ;
+			break ;	// EP0: Setup
+		case 1:
+			process_command_packets (  ) ;
+			break ;	// EP1: Command v1
+		default:
+			break ;
+		}
+
+		// Clear TRNIF, Advance USTAT FIFO
+		//UIRbits.TRNIF = 0 ;
 	}
 
-	if (UIRbits.URSTIF) {				// Reset
-		reset_usb();
-		UIRbits.URSTIF = 0;
+	if ( UIRbits.STALLIF ) {	// Stall
+
+		if ( UEP0bits.EPSTALL == 1 ) { // Stall on Endpoint 0
+			// Reset
+			Interfaces[0].Output.BDnCNT = EP0_BUFLEN ;
+			Interfaces[0].Output.BDnSTAT = UOWN | DTSEN ;
+
+			Interfaces[0].Input.BDnSTAT = 0x00 ;
+
+			UEP0bits.EPSTALL = 0 ;
+		}
+
+		if ( UEP1bits.EPSTALL == 1 ) { // Stall on Endpoint 1
+			// Reset
+			Interfaces[0].Output.BDnCNT = EP0_BUFLEN ;
+			Interfaces[0].Output.BDnSTAT = UOWN | DTSEN ;
+
+			Interfaces[0].Input.BDnSTAT = 0x00 ;
+
+			// Toggle LEDs to notify
+			__dev_state.red_led = LED_ON;
+			__dev_state.green_led = LED_OFF;
+			__dev_state.yellow_led = LED_OFF;
+
+			UEP1bits.EPSTALL = 0 ;
+		}
+		//UIRbits.STALLIF = 0 ;
 	}
-	
+
+	if ( UIRbits.URSTIF ) {	// Reset
+		reset_usb (  ) ;
+		//UIRbits.URSTIF = 0 ;
+	}
+	// Clear all bits ;
 	UIR = 0x00 ;
-	PIR2bits.USBIF = 0;
-						
+	PIR2bits.USBIF = 0 ;
 }
+
+/* Allow checking Input Buffer ownership from outside */
+bool usb_in_endpoint_busy ( uint8_t endpoint ) {
+	return Interfaces[endpoint].Input.uown ;
+}
+
+/* Update IN1 Buffer data for next IN request from host */
+void usb_arm_in_transfert (  ) {
+	uint8_t dts ;
+
+	Interfaces[1].Input.BDnCNT = sizeof ( __dev_state ) ;
+
+	memcpy ( ep_buffers.IN1, &__dev_state, sizeof ( __dev_state ) ) ;
+
+	dts = Interfaces[1].Input.dts ;
+	Interfaces[1].Input.BDnSTAT = 0 ;
+
+	if ( dts )
+		Interfaces[1].Input.BDnSTAT = UOWN | DTSEN ;
+	else
+		Interfaces[1].Input.BDnSTAT = UOWN | DTS | DTSEN ;
+}
+
+/* Local Variables:    */
+/* mode: c             */
+/* c-file-style: "k&r" */
+/* c-basic-offset: 8   */
+/* indent-tabs-mode: t */
+/* End:                */
