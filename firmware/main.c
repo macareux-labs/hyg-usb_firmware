@@ -108,7 +108,6 @@ void main ( void ) {
 		for ( k = 0; k < 255; k++ )
 			NOP (  );
 
-
 	// convert serial to string for usb configuration
 	j = 0;
 	for ( i = 0; i < 8; i++ ) {
@@ -145,53 +144,97 @@ void main ( void ) {
 	// Measurement loop
 	while ( 1 ) {
 
-		INTCONbits.PEIE = 0;	// Disable Peripheral interrupts
-		INTCONbits.GIE = 0;	// Disable General interrupt
-		PIE2bits.USBIE = 0;	// Disable USB interrupt
+		if (++k > 254)
+			if (++j > 254)
+				if (++i > 2) {
 
-		// Measure data
-		/*measure_rh   ( &__dev_state.hyg )    ;
-		   measure_temp ( &__dev_state.temp ); */
-		measure_all ( &__dev_state.hyg, &__dev_state.temp );
 
-		__dev_state.crc =
-			__dev_state.hyg.msb ^ __dev_state.
-			hyg.lsb ^ __dev_state.temp.msb ^ __dev_state.temp.
-			lsb ^ __dev_state.green_led ^ __dev_state.
-			yellow_led ^ __dev_state.red_led;
+					INTCONbits.PEIE = 0 ;    // Disable Peripheral interrupts
+					INTCONbits.GIE = 0 ;     // Disable General interrupt
+					PIE2bits.USBIE = 0 ;     // Disable USB interrupt
 
-		INTCONbits.PEIE = 1;	// Enable Peripheral interrupts
-		INTCONbits.GIE = 1;	// Enable General interrupt
-		PIE2bits.USBIE = 1;	// Enable USB interrupt
+					// Measure data
+					/*measure_rh   ( &__dev_state.hyg )    ;
+					  measure_temp ( &__dev_state.temp ) ; */
+					measure_all ( &__dev_state.hyg, &__dev_state.temp ) ;
 
-		if ( !usb_in_endpoint_busy ( 1 ) ) {
-			// Preset EP1 IN buffer with datas (really usefull only on boot,
-			// following rearming will happen in the USB Interrupt handler).
-			usb_arm_in_transfert (  );
+					if ( __dev_state.green_led == LED_AUTO )
+						toggle_green_led (  ) ;
+					else
+						set_green_led ( __dev_state.green_led );
+
+					if ( __dev_state.red_led == LED_AUTO )
+						toggle_red_led (  ) ;
+					else
+						set_red_led ( __dev_state.red_led );
+
+					if ( __dev_state.yellow_led == LED_AUTO )
+						toggle_yellow_led (  ) ;
+					else
+						set_yellow_led ( __dev_state.yellow_led );
+
+					INTCONbits.PEIE = 1 ;    // Enable Peripheral interrupts
+					INTCONbits.GIE = 1 ;     // Enable General interrupt
+					PIE2bits.USBIE = 1 ;     // Enable USB interrupt
+
+					i = 0 ;
+				}
+
+		if ( usb_out_endpoint_busy ( 1 ) == 0 ) {
+
+			// Process Inbound data
+			uint8_t *buf = usb_get_out_buffer ( 1 ) ;
+			if ( buf[0] == 65 )
+				__dev_state.green_led = LED_ON ;
+
+			if ( buf[0] == 66 )
+				__dev_state.green_led = LED_OFF ;
+
+			if ( buf[0] == 67 ) {
+				set_all_leds ( 0 ) ;
+				__dev_state.green_led = LED_AUTO ;
+			}
+
+			if ( buf[1] == 65 )
+				__dev_state.yellow_led = LED_ON ;
+
+			if ( buf[1] == 66 )
+				__dev_state.yellow_led = LED_OFF ;
+
+			if ( buf[1] == 67 ) {
+				set_all_leds ( 0 ) ;
+				__dev_state.yellow_led = LED_AUTO ;
+			}
+
+			if ( buf[2] == 65 )
+				__dev_state.red_led = LED_ON ;
+
+			if ( buf[2] == 66 )
+				__dev_state.red_led = LED_OFF ;
+
+			if ( buf[2] == 67 ) {
+				set_all_leds ( 0 ) ;
+				__dev_state.red_led = LED_AUTO ;
+			}
+
+			/* Update CRC */
+			__dev_state.crc =
+				__dev_state.hyg.msb ^ __dev_state.
+				hyg.lsb ^ __dev_state.temp.msb ^ __dev_state.temp.
+				lsb ^ __dev_state.green_led ^ __dev_state.
+				yellow_led ^ __dev_state.red_led ;
+
+			/* Wait for endpoint available */
+			while ( usb_in_endpoint_busy ( 1 ) == 1 ) ;
+
+			usb_arm_in_transfert ( 1, sizeof ( __dev_state ), &__dev_state ) ;
+
+			usb_arm_out_transfert ( ) ;
+
 		}
 
-		if ( __dev_state.green_led == LED_AUTO )
-			toggle_green_led (  );
-		else
-			set_green_led ( __dev_state.green_led );
-
-		if ( __dev_state.red_led == LED_AUTO )
-			toggle_red_led (  );
-		else
-			set_red_led ( __dev_state.red_led );
-
-		if ( __dev_state.yellow_led == LED_AUTO )
-			toggle_yellow_led (  );
-		else
-			set_yellow_led ( __dev_state.yellow_led );
-
-		// Pause
-		for ( i = 0; i < 3; i++ )
-			for ( j = 0; j < 255; j++ )
-				for ( k = 0; k < 255; k++ )
-					NOP (  );
-
 	}
+
 }
 
 /* Local Variables:    */

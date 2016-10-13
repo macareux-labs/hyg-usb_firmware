@@ -18,8 +18,11 @@
 #define USB_REQ_SET_ADDRESS             0x05
 #define USB_REQ_SET_CONFIGURATION       0x09
 
-void reset_usb (  );
-void usb_interrupt_handler (  );
-bool usb_in_endpoint_busy ( uint8_t ep );
-void usb_arm_in_transfert (  );
+void reset_usb (  ) ;
+void usb_interrupt_handler (  ) ;
+bool usb_out_endpoint_busy ( uint8_t ep ) ;
+bool usb_in_endpoint_busy ( uint8_t ep ) ;
+void usb_arm_in_transfert ( uint8_t ep, uint8_t cnt, void *ptr ) ;
+void usb_arm_out_transfert (  ) ;
+void *usb_get_out_buffer ( uint8_t ep ) ;
 #endif
