@@ -49,7 +49,7 @@ signed char measure_rh ( __WORD * value ) {
 
 /* Measure Temperature */
 signed char measure_temp ( __WORD * value ) {
-	return get_i2c_word_at ( 0xE0, value ) ;
+	return get_i2c_word_at ( 0xE3, value ) ;
 }
 
 /* Measure Relative Humidity and fetch measured temp */
