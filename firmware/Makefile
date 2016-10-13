@@ -31,13 +31,13 @@ pickit3: $(EXEC)
 	rm -f prog.cmd
 	echo "Device PIC$(CHIP)" >> prog.cmd
 	echo "Hwtool PICkit3 -p" >> prog.cmd
-	echo "Program $(EXEC).hex" >> prog.cmd
+	echo "Program $(EXEC)" >> prog.cmd
 	echo "Quit" >> prog.cmd
 	$(MDB) prog.cmd
 	@rm -f prog.cmd
 
 pickit2:
-	$(PK2CMD) -M -PPIC${CHIP} -F$(EXEC).hex -B$(PK2DEVPATH)
+	$(PK2CMD) -M -PPIC${CHIP} -F$(EXEC) -B$(PK2DEVPATH)
 
 
 # Pre-compile and generate dependency informations
