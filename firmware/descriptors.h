@@ -39,7 +39,7 @@ const DeviceDescriptorStruct DeviceDescriptor = {
 	EP0_BUFLEN ,		// Max packet size for EP0 (10)
 	0x04d8 ,		// Vendor ID
 	0xf2c4 ,		// Product ID
-	0x0102 ,		// Device release number
+	0x0103 ,		// Device release number
 	0x01 ,			// Manufacturer string index
 	0x02 ,			// Product string index
 	0x03 ,			// Device serial number string index
