@@ -182,8 +182,10 @@ void main ( void ) {
 
 		if ( usb_out_endpoint_busy ( 1 ) == 0 ) {
 
-			// Process Inbound data
+                        // Retrieve inbound data
 			uint8_t *buf = usb_get_out_buffer ( 1 ) ;
+			
+                        // Process Inbound data
 			if ( buf[0] == 65 )
 				__dev_state.green_led = LED_ON ;
 
@@ -227,8 +229,10 @@ void main ( void ) {
 			/* Wait for endpoint available */
 			while ( usb_in_endpoint_busy ( 1 ) == 1 ) ;
 
+                        /* Setup updated data for next transfert */
 			usb_arm_in_transfert ( 1, sizeof ( __dev_state ), &__dev_state ) ;
 
+                        /* Rearm out endpoint */
 			usb_arm_out_transfert ( ) ;
 
 		}
