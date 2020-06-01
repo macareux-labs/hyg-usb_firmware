@@ -20,6 +20,8 @@ PK2DEVPATH ?= /usr/share/pk2
 
 CHIP ?= 16F1455
 
+CFLAGS ?= -DENABLE_CRC
+
 # End overridable defaults.
 
 ## Internal variables
