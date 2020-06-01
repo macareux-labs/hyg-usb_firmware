@@ -39,7 +39,7 @@
 #pragma config USBLSCLK = 48MHz
 #endif
 
-void interrupt interrupt_handler (  ) {
+void __interrupt() interrupt_handler (  ) {
 	usb_interrupt_handler (  );
 }
 

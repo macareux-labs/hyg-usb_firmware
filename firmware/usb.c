@@ -39,8 +39,8 @@ typedef struct {
 } Interface ;
 
 // USB Module Memory Mapping start at 0x2000
-volatile __at ( 0x2000 )
-Interface Interfaces[2] ;
+volatile 
+Interface Interfaces[2] __at ( 0x2000 );
 
 struct {
 	// --- End Point 0
@@ -63,7 +63,7 @@ uint8_t addresse ;
 void setup_endpoints (  ) {
 
 	// Reset Buffer Descriptors and re-init
-	memset ( Interfaces, 0x0, sizeof ( Interfaces ) ) ;
+	memset ( (void *)Interfaces, 0x0, sizeof ( Interfaces ) ) ;
 
 	// * Setup Buffers
 	Interfaces[0].Output.BDnADR = PHYS_ADDR ( ep_buffers.OUT0 ) ;
